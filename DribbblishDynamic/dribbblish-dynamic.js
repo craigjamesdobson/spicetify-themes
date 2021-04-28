@@ -2,6 +2,7 @@
 document.getElementById("popover-container").style.height = 0;
 document.documentElement.style.setProperty('--warning_message', ' ');
 
+// Get stored hidden sidebar list
 let appHiddenList = [];
 try {
     const rawList = JSON.parse(localStorage.getItem("sidebar-app-hide-list"));
@@ -224,6 +225,7 @@ let nearArtistSpan = null
 let mainColor = getComputedStyle(document.documentElement).getPropertyValue('--modspotify_main_fg')
 let mainColor2 = getComputedStyle(document.documentElement).getPropertyValue('--modspotify_main_bg')
 let isLightBg = isLight(mainColor2)
+let customDarken = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--custom_darken'))
 
 waitForElement([".artist"], (queries) => {
     nearArtistSpan = document.createElement("span");
@@ -233,8 +235,7 @@ waitForElement([".artist"], (queries) => {
 
 function updateColors(root) {
     if( root===null) return;
-    let colHex = mainColor
-    if( isLightBg ) colHex = LightenDarkenColor(colHex, -5) // vibrant color is always too bright for white bg mode
+    let colHex = LightenDarkenColor(mainColor, customDarken)
     let colRGB = hexToRgb(colHex)
     let darkerColHex = LightenDarkenColor(colHex, isLightBg ? 45 : -40)
     let darkerColRGB = hexToRgb(darkerColHex)
@@ -281,7 +282,6 @@ function updateColorsAllIframes() {
     // code below works but then generate many errors on page change.
     let frames = document.getElementsByTagName("iframe");
     for (i=0; i<frames.length; ++i) {
-        console.log(i+". "+frames[i].id)
         try {
             updateColors(frames[i].contentDocument.documentElement)
         } catch (error) {
@@ -355,3 +355,37 @@ window.addEventListener("message", ({data: info}) => {
 
 // Add "About" item in profile menu
 new Spicetify.Menu.Item("About", false, () => window.open("spotify:app:about")).register();
+
+// Track elapsed time
+(function Dribbblish() {
+    if (!Spicetify.Player.origin || !Spicetify.EventDispatcher || !Spicetify.Event) {
+        setTimeout(Dribbblish, 300);
+        return;
+    }
+
+    const progBar = Spicetify.Player.origin.progressbar;
+
+    // Remove default elapsed element update since we already hide it
+    progBar._listenerMap["progress"].pop();
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "handle prog-tooltip";
+    progBar._innerElement.append(tooltip);
+    
+    function updateTooltip(e) {
+        const curWidth = progBar._innerElement.offsetWidth;
+        const maxWidth = progBar._container.offsetWidth;
+        const ttWidth = tooltip.offsetWidth / 2;
+        if (curWidth < ttWidth) {
+            tooltip.style.right = String(-ttWidth * 2 + curWidth) + "px";
+        } else if (curWidth > maxWidth - ttWidth) {
+            tooltip.style.right = String(curWidth - maxWidth) + "px";
+        } else {
+            tooltip.style.right = String(-ttWidth) + "px";
+        }
+        tooltip.innerText = Spicetify.Player.formatTime(e) + " / " +
+            Spicetify.Player.formatTime(Spicetify.Player.getDuration());
+    }
+    progBar.addListener("progress", (e) => {updateTooltip(e.value)});
+    updateTooltip(progBar._currentValue);
+})();
